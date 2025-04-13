@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced Invoice Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+    }
+    h1, h2, h3 {
+      text-align: center;
+    }
+    .invoice-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .form-section {
+      margin: 20px auto;
+      max-width: 800px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    .controls input, .controls select {
+      margin: 5px;
+      padding: 5px;
+    }
+    .controls button {
+      padding: 6px 12px;
+      margin: 5px;
+    }
+    .totals {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    .download-btns {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .download-btns button {
+      margin: 5px;
+      padding: 10px 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-header">
+    <h2>ELITE SYSTEM SALES & SERVICES</h2>
+    <p>#11, Plot No 32A, 2nd Cross St, Gubera Nagar,<br> Iyancheri Main Road, Urapakkam East-603210<br> Phone: 9876543210<br> GSTIN: 33ABCDE1234F1Z5</p>
+  </div>
+
+  <div class="form-section">
+    <div class="controls">
+      <label>Customer Name: <input type="text" id="customerName"></label>
+      <label>Customer Address: <input type="text" id="customerAddress"></label><br>
+      <label>Item: <input type="text" id="item"></label>
+      <label>Qty: <input type="number" id="qty"></label>
+      <label>Price: <input type="number" id="price"></label>
+      <button onclick="addItem()">Add Item</button><br>
+      <label>Discount (%): <input type="number" id="discount" value="0"></label><br>
+      
+      <label>Payment Mode: 
+        <select id="paymentMode" onchange="toggleCardDetails()">
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+        </select>
+      </label><br>
+
+      <div id="cardDetails" style="display: none;">
+        <label>Card Number: <input type="text" id="cardNumber"></label><br>
+        <label>Cardholder Name: <input type="text" id="cardName"></label><br>
+        <label>Expiry Date: <input type="month" id="expiryDate"></label><br>
+      </div>
+
+      <label>Payment Status: 
+        <select id="paymentStatus">
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
+        </select>
+      </label>
+    </div>
+
+    <table id="invoiceTable">
+      <thead>
+        <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="totals">
+      <p>Subtotal: ₹<span id="subtotal">0.00</span></p>
+      <p>CGST (2.5%): ₹<span id="cgst">0.00</span></p>
+      <p>SGST (2.5%): ₹<span id="sgst">0.00</span></p>
+      <p>Discount: ₹<span id="discountAmt">0.00</span></p>
+      <p>Grand Total: ₹<span id="grandTotal">0.00</span></p>
+    </div>
+
+    <div class="download-btns">
+      <button onclick="downloadPDF()">Download PDF</button>
+      <button onclick="downloadExcel()">Download Excel</button>
+    </div>
+  </div>
+
+<script>
+  let totalAmount = 0;
+
+  function addItem() {
+    const item = document.getElementById("item").value;
+    const qty = parseFloat(document.getElementById("qty").value);
+    const price = parseFloat(document.getElementById("price").value);
+    if (!item || isNaN(qty) || isNaN(price)) return alert("Please fill item details correctly.");
+
+    const total = qty * price;
+    totalAmount += total;
+
+    const tbody = document.querySelector("#invoiceTable tbody");
+    const row = tbody.insertRow();
+    row.innerHTML = `<td>${item}</td><td>${qty}</td><td>${price}</td><td>${total.toFixed(2)}</td><td><button onclick="deleteRow(this, ${total})">Delete</button></td>`;
+
+    document.getElementById("item").value = "";
+    document.getElementById("qty").value = "";
+    document.getElementById("price").value = "";
+
+    updateTotals();
+  }
+
+  function deleteRow(btn, amount) {
+    btn.closest('tr').remove();
+    totalAmount -= amount;
+    updateTotals();
+  }
+
+  function updateTotals() {
+    const discountRate = parseFloat(document.getElementById("discount").value) || 0;
+    const discountAmt = totalAmount * discountRate / 100;
+    const subtotal = totalAmount;
+    const taxable = subtotal - discountAmt;
+    const cgst = taxable * 0.025;
+    const sgst = taxable * 0.025;
+    const grandTotal = taxable + cgst + sgst;
+
+    document.getElementById("subtotal").innerText = subtotal.toFixed(2);
+    document.getElementById("discountAmt").innerText = discountAmt.toFixed(2);
+    document.getElementById("cgst").innerText = cgst.toFixed(2);
+    document.getElementById("sgst").innerText = sgst.toFixed(2);
+    document.getElementById("grandTotal").innerText = grandTotal.toFixed(2);
+  }
+
+  function toggleCardDetails() {
+    const paymentMode = document.getElementById("paymentMode").value;
+    const cardDetails = document.getElementById("cardDetails");
+    cardDetails.style.display = paymentMode === "card" ? "block" : "none";
+  }
+
+  function downloadExcel() {
+    const table = document.getElementById("invoiceTable");
+    const wb = XLSX.utils.table_to_book(table, { sheet: "Invoice" });
+    XLSX.writeFile(wb, "invoice.xlsx");
+  }
+
+  function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = 10;
+
+    // Add title and company info
+    doc.setFontSize(14);
+    doc.text("INVOICE", 150, y);
+    y += 10;
+    doc.setFontSize(10);
+    doc.text("ELITE SYSTEM SALES & SERVICES", 10, y); y += 5;
+    doc.text("#11, Plot No 32A, 2nd Cross St, Gubera Nagar", 10, y); y += 5;
+    doc.text("Iyancheri Main Road, Urapakkam East-603210", 10, y); y += 5;
+    doc.text("Phone: 9876543210", 10, y); y += 5;
+    doc.text("GSTIN: 33ABCDE1234F1Z5", 10, y); y += 5;
+
+    const today = new Date().toLocaleDateString();
+    doc.text(`Date: ${today}`, 150, 30);
+    doc.text(`Invoice #: ${Math.floor(Math.random() * 1000000)}`, 150, 36);
+
+    const customerName = document.getElementById("customerName").value;
+    const customerAddress = document.getElementById("customerAddress").value;
+    y += 10;
+    if (customerName) doc.text(`Bill To: ${customerName}`, 10, y);
+    if (customerAddress) doc.text(`${customerAddress}`, 10, y + 5);
+
+    const rows = Array.from(document.querySelectorAll("#invoiceTable tbody tr")).map(row =>
+      Array.from(row.querySelectorAll("td")).slice(0, 4).map(cell => cell.innerText)
+    );
+
+    doc.autoTable({
+      startY: y + 15,
+      head: [["Item", "Qty", "Price", "Total"]],
+      body: rows,
+    });
+
+    const yAfter = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    doc.text(`Subtotal: ₹${parseFloat(document.getElementById("subtotal").innerText).toFixed(2)}`, 10, yAfter);
+    doc.text(`Discount: ₹${parseFloat(document.getElementById("discountAmt").innerText).toFixed(2)}`, 10, yAfter + 6);
+    doc.text(`CGST (2.5%): ₹${parseFloat(document.getElementById("cgst").innerText).toFixed(2)}`, 10, yAfter + 12);
+    doc.text(`SGST (2.5%): ₹${parseFloat(document.getElementById("sgst").innerText).toFixed(2)}`, 10, yAfter + 18);
+    doc.text(`Grand Total: ₹${parseFloat(document.getElementById("grandTotal").innerText).toFixed(2)}`, 10, yAfter + 24);
+
+    const paymentMode = document.getElementById("paymentMode").value;
+    const paymentStatus = document.getElementById("paymentStatus").value;
+
+    doc.text(`Payment Mode: ${paymentMode === "cash" ? "Cash" : "Card"}`, 10, yAfter + 30);
+    if (paymentMode === "card") {
+      const cardNumber = document.getElementById("cardNumber").value;
+      const cardName = document.getElementById("cardName").value;
+      const expiryDate = document.getElementById("expiryDate").value;
+      doc.text(`Card Number: ${cardNumber}`, 10, yAfter + 36);
+      doc.text(`Cardholder Name: ${cardName}`, 10, yAfter + 42);
+      doc.text(`Expiry Date: ${expiryDate}`, 10, yAfter + 48);
+    }
+
+    doc.text(`Payment Status: ${paymentStatus === "paid" ? "Paid" : "Unpaid"}`, 10, yAfter + 54);
+    doc.text("Thank you for your business!", 10, yAfter + 64);
+
+    doc.save("invoice.pdf");
+  }
+</script>
+
+</body>
+</html>
